@@ -1,8 +1,36 @@
 # --- settings ---
-$Processes = @("discord", "spotify", "aces", "wtrti")   # names without .exe
-$PollSeconds = 10
-$FlushSummarySeconds = 60
-$OutDir = $PSScriptRoot
+$ConfigPath = Join-Path $PSScriptRoot "ip_monitor_config.psd1"
+if (-not (Test-Path $ConfigPath)) {
+    $defaultConfig = @'
+@{
+    # process names without .exe
+    Processes = @("process1", "process2")
+
+    # process polling interval (sec)
+    PollSeconds = 10
+
+    # summary file update interval (sec)
+    FlushSummarySeconds = 60
+
+    # log unloading folder (empty = script folder)
+    OutDir = ""
+}
+'@
+    Set-Content -Path $ConfigPath -Value $defaultConfig -Encoding UTF8
+}
+
+$config = Import-PowerShellDataFile -Path $ConfigPath
+if ($null -eq $config) {
+    throw "Config error."
+}
+
+$Processes = @($config.Processes)
+$PollSeconds = [int]$config.PollSeconds
+$FlushSummarySeconds = [int]$config.FlushSummarySeconds
+$OutDir = [string]$config.OutDir
+if ([string]::IsNullOrWhiteSpace($OutDir)) {
+    $OutDir = $PSScriptRoot
+}
 $RawDir = Join-Path $OutDir "raw"
 $LogRaw = Join-Path $RawDir "ips_raw.log"
 $SummaryCsv = Join-Path $OutDir "ip_summary.csv"

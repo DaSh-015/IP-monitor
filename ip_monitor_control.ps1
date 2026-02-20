@@ -385,8 +385,32 @@ function Show-SettingsMenu {
             "r" { return }
             "R" { return }
             "1" { Show-ProcessesMenu }
-            "2" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
-            "3" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
+            "2" {
+                Write-Host "Process IP check interval (sec)"
+                $pollInput = Read-Host "New value"
+                $pollSeconds = 0
+                if (-not [int]::TryParse($pollInput, [ref]$pollSeconds) -or $pollSeconds -lt 1) {
+                    Write-Host "Invalid value" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $config.PollSeconds = $pollSeconds
+                Save-Config -Config $config
+            }
+            "3" {
+                Write-Host "ip_summary.csv update interval (sec)"
+                $summaryInput = Read-Host "New value"
+                $summarySeconds = 0
+                if (-not [int]::TryParse($summaryInput, [ref]$summarySeconds) -or $summarySeconds -lt 1) {
+                    Write-Host "Invalid value" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $config.FlushSummarySeconds = $summarySeconds
+                Save-Config -Config $config
+            }
             "4" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
             default { Write-Host "Invalid choice" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }

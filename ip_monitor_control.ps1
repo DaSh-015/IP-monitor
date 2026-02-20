@@ -30,6 +30,33 @@ function New-DefaultConfig {
     Set-Content -Path $ConfigPath -Value $defaultConfig -Encoding UTF8
 }
 
+function Save-Config {
+    param(
+        [hashtable]$Config
+    )
+
+    $processes = @($Config.Processes | ForEach-Object { "'{0}'" -f ([string]$_).Replace("'", "''") })
+    $outDir = ([string]$Config.OutDir).Replace("'", "''")
+
+    $configContent = @(
+        '@{'
+        '    # process names without .exe'
+        "    Processes = @($($processes -join ', '))"
+        ''
+        '    # process polling interval (sec)'
+        "    PollSeconds = $([int]$Config.PollSeconds)"
+        ''
+        '    # summary file update interval (sec)'
+        "    FlushSummarySeconds = $([int]$Config.FlushSummarySeconds)"
+        ''
+        '    # log unloading folder (empty = script folder)'
+        "    OutDir = '$outDir'"
+        '}'
+    ) -join [Environment]::NewLine
+
+    Set-Content -Path $ConfigPath -Value $configContent -Encoding UTF8
+}
+
 function Test-ConfigFormat {
     param(
         [hashtable]$Config
@@ -123,6 +150,200 @@ function Show-Header {
     Write-Host "===== IP Monitor Control ====="
 }
 
+function Get-ProcessMonitorState {
+    param(
+        [string]$ProcessName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessName)) {
+        return $false
+    }
+
+    $normalizedName = ([string]$ProcessName).Trim()
+    if ($normalizedName -match '(?i)\.exe$') {
+        $normalizedName = $normalizedName.Substring(0, $normalizedName.Length - 4)
+    }
+
+    $matchedProcesses = Get-Process -Name $normalizedName -ErrorAction SilentlyContinue
+    return $null -ne $matchedProcesses
+}
+
+function Normalize-ProcessName {
+    param(
+        [string]$ProcessName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessName)) {
+        return ""
+    }
+
+    $normalizedName = $ProcessName.Trim()
+    if ($normalizedName -match '(?i)\.exe$') {
+        $normalizedName = $normalizedName.Substring(0, $normalizedName.Length - 4)
+    }
+
+    return $normalizedName
+}
+
+function Show-ProcessStatus {
+    param(
+        [bool]$IsRunning
+    )
+
+    if ($IsRunning) {
+        Write-Host "running" -ForegroundColor Green
+    }
+    else {
+        Write-Host "not found" -ForegroundColor Red
+    }
+}
+
+function Show-ProcessItemMenu {
+    param(
+        [int]$ProcessIndex
+    )
+
+    while ($true) {
+        $config = Get-Config
+        if ($null -eq $config) {
+            return
+        }
+
+        $processes = @($config.Processes)
+        if ($ProcessIndex -lt 0 -or $ProcessIndex -ge $processes.Count) {
+            return
+        }
+
+        $processName = [string]$processes[$ProcessIndex]
+        $isRunning = Get-ProcessMonitorState -ProcessName $processName
+
+        Show-Header
+        Write-Host ""
+        Write-Host "Settings"
+        Write-Host " - Processes"
+        Write-Host "   - $processName " -NoNewline
+        Show-ProcessStatus -IsRunning $isRunning
+        Write-Host ""
+        Write-Host "r) return"
+        Write-Host "c) replace"
+        Write-Host "d) delete"
+        Write-Host ""
+
+        $itemChoice = Read-Host "Select option"
+
+        switch ($itemChoice.ToLowerInvariant()) {
+            'r' { return }
+            'c' {
+                $replacement = Normalize-ProcessName -ProcessName (Read-Host "New process name")
+                if ([string]::IsNullOrWhiteSpace($replacement)) {
+                    Write-Host "Process name cannot be empty" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $existing = @($config.Processes)
+                $hasDuplicate = $false
+                for ($i = 0; $i -lt $existing.Count; $i++) {
+                    if ($i -ne $ProcessIndex -and [string]$existing[$i] -eq $replacement) {
+                        $hasDuplicate = $true
+                        break
+                    }
+                }
+
+                if ($hasDuplicate) {
+                    Write-Host "Process already exists" -ForegroundColor Yellow
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $existing[$ProcessIndex] = $replacement
+                $config.Processes = @($existing)
+                Save-Config -Config $config
+                continue
+            }
+            'd' {
+                $updatedProcesses = New-Object System.Collections.ArrayList
+                foreach ($proc in @($config.Processes)) {
+                    [void]$updatedProcesses.Add($proc)
+                }
+                $updatedProcesses.RemoveAt($ProcessIndex)
+                $config.Processes = @($updatedProcesses)
+                Save-Config -Config $config
+                return
+            }
+            default {
+                Write-Host "Invalid choice" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
+        }
+    }
+}
+
+function Show-ProcessesMenu {
+    while ($true) {
+        $config = Get-Config
+        if ($null -eq $config) {
+            return
+        }
+
+        Show-Header
+        Write-Host ""
+        Write-Host "Settings"
+        Write-Host " - Processes"
+        Write-Host ""
+        Write-Host "Processes under the monitor's supervision: $(@($config.Processes).Count)"
+        Write-Host ""
+        Write-Host "r) return"
+        Write-Host "a) add process"
+        Write-Host ""
+
+        $index = 1
+        foreach ($processName in @($config.Processes)) {
+            Write-Host "$index) $processName - " -NoNewline
+            Show-ProcessStatus -IsRunning (Get-ProcessMonitorState -ProcessName ([string]$processName))
+            $index++
+        }
+
+        Write-Host ""
+        $processChoice = Read-Host "Select option"
+        $normalizedChoice = $processChoice.ToLowerInvariant()
+
+        if ($normalizedChoice -eq 'r') {
+            return
+        }
+
+        if ($normalizedChoice -eq 'a') {
+            $newProcess = Normalize-ProcessName -ProcessName (Read-Host "Process name")
+            if ([string]::IsNullOrWhiteSpace($newProcess)) {
+                Write-Host "Process name cannot be empty" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+                continue
+            }
+
+            if (@($config.Processes) -contains $newProcess) {
+                Write-Host "Process already exists" -ForegroundColor Yellow
+                Start-Sleep -Seconds 1
+                continue
+            }
+
+            $config.Processes = @($config.Processes) + $newProcess
+            Save-Config -Config $config
+            continue
+        }
+
+        $selectedIndex = 0
+        if ([int]::TryParse($processChoice, [ref]$selectedIndex)) {
+            if ($selectedIndex -ge 1 -and $selectedIndex -le @($config.Processes).Count) {
+                Show-ProcessItemMenu -ProcessIndex ($selectedIndex - 1)
+                continue
+            }
+        }
+
+        Write-Host "Invalid choice" -ForegroundColor Red
+        Start-Sleep -Seconds 1
+    }
+}
+
 function Show-SettingsMenu {
     while ($true) {
         $config = Get-Config
@@ -163,9 +384,33 @@ function Show-SettingsMenu {
         switch ($settingsChoice) {
             "r" { return }
             "R" { return }
-            "1" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
-            "2" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
-            "3" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
+            "1" { Show-ProcessesMenu }
+            "2" {
+                Write-Host "Process IP check interval (sec)"
+                $pollInput = Read-Host "New value"
+                $pollSeconds = 0
+                if (-not [int]::TryParse($pollInput, [ref]$pollSeconds) -or $pollSeconds -lt 1) {
+                    Write-Host "Invalid value" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $config.PollSeconds = $pollSeconds
+                Save-Config -Config $config
+            }
+            "3" {
+                Write-Host "ip_summary.csv update interval (sec)"
+                $summaryInput = Read-Host "New value"
+                $summarySeconds = 0
+                if (-not [int]::TryParse($summaryInput, [ref]$summarySeconds) -or $summarySeconds -lt 1) {
+                    Write-Host "Invalid value" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $config.FlushSummarySeconds = $summarySeconds
+                Save-Config -Config $config
+            }
             "4" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
             default { Write-Host "Invalid choice" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }

@@ -380,10 +380,14 @@ function Show-SettingsMenu {
         Write-Host ""
         Write-Host "Settings"
         Write-Host ""
+        $displayOutDir = [string]$config.OutDir
+        if ([string]::IsNullOrWhiteSpace($displayOutDir)) {
+            $displayOutDir = $PSScriptRoot
+        }
         Write-Host "1 - Processes: $(@($config.Processes).Count)"
         Write-Host "2 - Polling interval: $([int]$config.PollSeconds) sec"
         Write-Host "3 - Summary interval: $([int]$config.FlushSummarySeconds) sec"
-        Write-Host "4 - Log dir: $([string]$config.OutDir)"
+        Write-Host "4 - Log dir: $displayOutDir"
         Write-Host "0/r - return"
         Write-Host ""
         $settingsChoice = Read-Host "Select option"
@@ -414,7 +418,39 @@ function Show-SettingsMenu {
                 $config.FlushSummarySeconds = $summarySeconds
                 Save-Config -Config $config
             }
-            "4" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
+            "4" {
+                $logDirInput = Read-Host 'Log unloading folder (enter "d" to select script folder)'
+                if ([string]::IsNullOrWhiteSpace($logDirInput)) {
+                    Write-Host "canceled" -ForegroundColor Yellow
+                    Start-Sleep -Milliseconds 500
+                    continue
+                }
+
+                if ($logDirInput.Trim().ToLowerInvariant() -eq 'd') {
+                    $config.OutDir = ""
+                    Save-Config -Config $config
+                    continue
+                }
+
+                $selectedPath = $logDirInput.Trim()
+                if (-not (Test-Path -Path $selectedPath -PathType Container)) {
+                    Write-Host "Invalid or inaccessible path" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                try {
+                    $resolvedPath = (Resolve-Path -Path $selectedPath -ErrorAction Stop).ProviderPath
+                }
+                catch {
+                    Write-Host "Invalid or inaccessible path" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $config.OutDir = $resolvedPath
+                Save-Config -Config $config
+            }
 			"0" { return }
 			"r" { return }
 			"h" { return }

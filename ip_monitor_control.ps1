@@ -219,9 +219,7 @@ function Show-ProcessItemMenu {
 
         Show-Header
         Write-Host ""
-        Write-Host "Settings"
-        Write-Host " - Processes"
-        Write-Host "   - $processName " -NoNewline
+        Write-Host "Settings > Processes > $processName " -NoNewline
         Show-ProcessStatus -IsRunning $isRunning
         Write-Host ""
         Write-Host "r) return"
@@ -288,31 +286,26 @@ function Show-ProcessesMenu {
 
         Show-Header
         Write-Host ""
-        Write-Host "Settings"
-        Write-Host " - Processes"
-        Write-Host ""
+		Write-Host "Settings > Processes"
         Write-Host "Processes under the monitor's supervision: $(@($config.Processes).Count)"
-        Write-Host ""
-        Write-Host "r) return"
-        Write-Host "a) add process"
-        Write-Host ""
+		Write-Host ""
 
         $index = 1
         foreach ($processName in @($config.Processes)) {
-            Write-Host "$index) $processName - " -NoNewline
+            Write-Host "$index - $processName " -NoNewline
             Show-ProcessStatus -IsRunning (Get-ProcessMonitorState -ProcessName ([string]$processName))
             $index++
         }
-
+		
+		Write-Host "$index/a - add process"
+		Write-Host "clear - delete all processes"
+		Write-Host "0/r - return"
+		Write-Host "h - main menu"
         Write-Host ""
         $processChoice = Read-Host "Select option"
         $normalizedChoice = $processChoice.ToLowerInvariant()
 
-        if ($normalizedChoice -eq 'r') {
-            return
-        }
-
-        if ($normalizedChoice -eq 'a') {
+        if ($normalizedChoice -eq $index -or $normalizedChoice -eq 'a') {
             $newProcess = Normalize-ProcessName -ProcessName (Read-Host "Process name")
             if ([string]::IsNullOrWhiteSpace($newProcess)) {
                 Write-Host "Process name cannot be empty" -ForegroundColor Red
@@ -329,6 +322,20 @@ function Show-ProcessesMenu {
             $config.Processes = @($config.Processes) + $newProcess
             Save-Config -Config $config
             continue
+        }
+		
+		if ($normalizedChoice -eq 'clear') {
+			Write-Host "Option is not available yet"; Start-Sleep -Seconds 1
+			continue
+        }
+		
+        if ($normalizedChoice -eq '0' -or $normalizedChoice -eq 'r') {
+            return
+        }
+		
+		if ($normalizedChoice -eq 'h') {
+			Write-Host "Option is not available yet"; Start-Sleep -Seconds 1
+			continue
         }
 
         $selectedIndex = 0
@@ -373,17 +380,15 @@ function Show-SettingsMenu {
         Write-Host ""
         Write-Host "Settings"
         Write-Host ""
-        Write-Host "r) return"
-        Write-Host "1) Processes: $(@($config.Processes).Count)"
-        Write-Host "2) Polling interval: $([int]$config.PollSeconds) sec"
-        Write-Host "3) Summary interval: $([int]$config.FlushSummarySeconds) sec"
-        Write-Host "4) Log dir: $([string]$config.OutDir)"
+        Write-Host "1 - Processes: $(@($config.Processes).Count)"
+        Write-Host "2 - Polling interval: $([int]$config.PollSeconds) sec"
+        Write-Host "3 - Summary interval: $([int]$config.FlushSummarySeconds) sec"
+        Write-Host "4 - Log dir: $([string]$config.OutDir)"
+        Write-Host "0/r - return"
         Write-Host ""
         $settingsChoice = Read-Host "Select option"
 
         switch ($settingsChoice) {
-            "r" { return }
-            "R" { return }
             "1" { Show-ProcessesMenu }
             "2" {
                 $pollInput = Read-Host "Process IP check interval (sec)"
@@ -410,6 +415,10 @@ function Show-SettingsMenu {
                 Save-Config -Config $config
             }
             "4" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
+			"0" { return }
+			"r" { return }
+			"h" { return }
+			
             default { Write-Host "Invalid choice" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
     }
@@ -421,9 +430,9 @@ while ($true) {
 	Write-Host ""
     Show-Status
 	Write-Host ""
-    Write-Host "1) Start"
-    Write-Host "2) Stop"
-    Write-Host "3) Settings"
+    Write-Host "1 - Start"
+    Write-Host "2 - Stop"
+    Write-Host "3 - Settings"
     Write-Host ""
     $choice = Read-Host "Select option"
 

@@ -30,6 +30,33 @@ function New-DefaultConfig {
     Set-Content -Path $ConfigPath -Value $defaultConfig -Encoding UTF8
 }
 
+function Save-Config {
+    param(
+        [hashtable]$Config
+    )
+
+    $processes = @($Config.Processes | ForEach-Object { "'{0}'" -f ([string]$_).Replace("'", "''") })
+    $outDir = ([string]$Config.OutDir).Replace("'", "''")
+
+    $configContent = @(
+        '@{'
+        '    # process names without .exe'
+        "    Processes = @($($processes -join ', '))"
+        ''
+        '    # process polling interval (sec)'
+        "    PollSeconds = $([int]$Config.PollSeconds)"
+        ''
+        '    # summary file update interval (sec)'
+        "    FlushSummarySeconds = $([int]$Config.FlushSummarySeconds)"
+        ''
+        '    # log unloading folder (empty = script folder)'
+        "    OutDir = '$outDir'"
+        '}'
+    ) -join [Environment]::NewLine
+
+    Set-Content -Path $ConfigPath -Value $configContent -Encoding UTF8
+}
+
 function Test-ConfigFormat {
     param(
         [hashtable]$Config
@@ -123,6 +150,85 @@ function Show-Header {
     Write-Host "===== IP Monitor Control ====="
 }
 
+function Get-ProcessMonitorState {
+    param(
+        [string]$ProcessName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessName)) {
+        return $false
+    }
+
+    $normalizedName = $ProcessName
+    if ($normalizedName -match '\.exe$') {
+        $normalizedName = $normalizedName.Substring(0, $normalizedName.Length - 4)
+    }
+
+    $matchedProcesses = Get-Process -Name $normalizedName -ErrorAction SilentlyContinue
+    return $null -ne $matchedProcesses
+}
+
+function Show-ProcessesMenu {
+    while ($true) {
+        $config = Get-Config
+        if ($null -eq $config) {
+            return
+        }
+
+        Show-Header
+        Write-Host ""
+        Write-Host "Processes under the monitor's supervision: $(@($config.Processes).Count)"
+        Write-Host ""
+        Write-Host "r) return"
+        Write-Host "a) add process"
+        Write-Host ""
+
+        $index = 1
+        foreach ($processName in @($config.Processes)) {
+            Write-Host "$index) $processName - " -NoNewline
+            if (Get-ProcessMonitorState -ProcessName ([string]$processName)) {
+                Write-Host "running" -ForegroundColor Green
+            }
+            else {
+                Write-Host "not found" -ForegroundColor Red
+            }
+            $index++
+        }
+
+        Write-Host ""
+        $processChoice = Read-Host "Select option"
+
+        switch ($processChoice.ToLowerInvariant()) {
+            'r' { return }
+            'a' {
+                $newProcess = Read-Host "Process name (without .exe)"
+                if ([string]::IsNullOrWhiteSpace($newProcess)) {
+                    Write-Host "Process name cannot be empty" -ForegroundColor Red
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                if ($newProcess -match '\.exe$') {
+                    $newProcess = $newProcess.Substring(0, $newProcess.Length - 4)
+                }
+
+                if (@($config.Processes) -contains $newProcess) {
+                    Write-Host "Process already exists" -ForegroundColor Yellow
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
+                $config.Processes = @($config.Processes) + $newProcess
+                Save-Config -Config $config
+            }
+            default {
+                Write-Host "Invalid choice" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
+        }
+    }
+}
+
 function Show-SettingsMenu {
     while ($true) {
         $config = Get-Config
@@ -163,7 +269,7 @@ function Show-SettingsMenu {
         switch ($settingsChoice) {
             "r" { return }
             "R" { return }
-            "1" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
+            "1" { Show-ProcessesMenu }
             "2" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
             "3" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
             "4" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }

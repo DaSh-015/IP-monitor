@@ -181,16 +181,15 @@ function Show-ProcessesMenu {
         Write-Host ""
         Write-Host "r) return"
         Write-Host "a) add process"
-        Write-Host ""
 
         $index = 1
         foreach ($processName in @($config.Processes)) {
-            Write-Host "$index) $processName - " -NoNewline
+            Write-Host "$index) $processName " -NoNewline
             if (Get-ProcessMonitorState -ProcessName ([string]$processName)) {
-                Write-Host "running" -ForegroundColor Green
+                Write-Host "- running" -ForegroundColor Green
             }
             else {
-                Write-Host "not found" -ForegroundColor Red
+                Write-Host "- not found" -ForegroundColor Red
             }
             $index++
         }

@@ -242,12 +242,18 @@ function Show-ProcessItemMenu {
                 }
 
                 $existing = @($config.Processes)
+                $hasDuplicate = $false
                 for ($i = 0; $i -lt $existing.Count; $i++) {
                     if ($i -ne $ProcessIndex -and [string]$existing[$i] -eq $replacement) {
-                        Write-Host "Process already exists" -ForegroundColor Yellow
-                        Start-Sleep -Seconds 1
-                        continue 2
+                        $hasDuplicate = $true
+                        break
                     }
+                }
+
+                if ($hasDuplicate) {
+                    Write-Host "Process already exists" -ForegroundColor Yellow
+                    Start-Sleep -Seconds 1
+                    continue
                 }
 
                 $existing[$ProcessIndex] = $replacement

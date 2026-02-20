@@ -219,23 +219,23 @@ function Show-ProcessItemMenu {
 
         Show-Header
         Write-Host ""
-        Write-Host "Settings > Processes > $processName " -NoNewline
+        Write-Host "Settings > processes > $processName " -NoNewline
         Show-ProcessStatus -IsRunning $isRunning
         Write-Host ""
-        Write-Host "r) return"
-        Write-Host "c) replace"
-        Write-Host "d) delete"
+        Write-Host "1/c - replace"
+        Write-Host "2/d - delete"
+		Write-Host "0/r - return"
+		Write-Host "h - main menu"
         Write-Host ""
 
         $itemChoice = Read-Host "Select option"
 
         switch ($itemChoice.ToLowerInvariant()) {
-            'r' { return }
             'c' {
                 $replacement = Normalize-ProcessName -ProcessName (Read-Host "New process name")
                 if ([string]::IsNullOrWhiteSpace($replacement)) {
-                    Write-Host "Process name cannot be empty" -ForegroundColor Red
-                    Start-Sleep -Seconds 1
+                    Write-Host "canceled" -ForegroundColor Yellow
+                    Start-Sleep -Milliseconds 400
                     continue
                 }
 
@@ -269,6 +269,8 @@ function Show-ProcessItemMenu {
                 Save-Config -Config $config
                 return
             }
+			'r' { return }
+			'h' { return }
             default {
                 Write-Host "Invalid choice" -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -286,7 +288,7 @@ function Show-ProcessesMenu {
 
         Show-Header
         Write-Host ""
-		Write-Host "Settings > Processes"
+		Write-Host "Settings > processes"
         Write-Host "Processes under the monitor's supervision: $(@($config.Processes).Count)"
 		Write-Host ""
 
@@ -308,8 +310,8 @@ function Show-ProcessesMenu {
         if ($normalizedChoice -eq $index -or $normalizedChoice -eq 'a') {
             $newProcess = Normalize-ProcessName -ProcessName (Read-Host "Process name")
             if ([string]::IsNullOrWhiteSpace($newProcess)) {
-                Write-Host "Process name cannot be empty" -ForegroundColor Red
-                Start-Sleep -Seconds 1
+                Write-Host "canceled" -ForegroundColor Yellow
+                Start-Sleep -Milliseconds 400
                 continue
             }
 
@@ -384,10 +386,10 @@ function Show-SettingsMenu {
         if ([string]::IsNullOrWhiteSpace($displayOutDir)) {
             $displayOutDir = $PSScriptRoot
         }
-        Write-Host "1 - Processes: $(@($config.Processes).Count)"
-        Write-Host "2 - Polling interval: $([int]$config.PollSeconds) sec"
-        Write-Host "3 - Summary interval: $([int]$config.FlushSummarySeconds) sec"
-        Write-Host "4 - Log dir: $displayOutDir"
+        Write-Host "1 - processes: $(@($config.Processes).Count)"
+        Write-Host "2 - polling interval: $([int]$config.PollSeconds) sec"
+        Write-Host "3 - summary interval: $([int]$config.FlushSummarySeconds) sec"
+        Write-Host "4 - log dir: $displayOutDir"
         Write-Host "0/r - return"
         Write-Host ""
         $settingsChoice = Read-Host "Select option"
@@ -422,7 +424,7 @@ function Show-SettingsMenu {
                 $logDirInput = Read-Host 'Log unloading folder (enter "d" to select script folder)'
                 if ([string]::IsNullOrWhiteSpace($logDirInput)) {
                     Write-Host "canceled" -ForegroundColor Yellow
-                    Start-Sleep -Milliseconds 500
+                    Start-Sleep -Milliseconds 400
                     continue
                 }
 
@@ -466,9 +468,9 @@ while ($true) {
 	Write-Host ""
     Show-Status
 	Write-Host ""
-    Write-Host "1 - Start"
-    Write-Host "2 - Stop"
-    Write-Host "3 - Settings"
+    Write-Host "1 - start"
+    Write-Host "2 - stop"
+    Write-Host "3 - settings"
     Write-Host ""
     $choice = Read-Host "Select option"
 

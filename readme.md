@@ -1,65 +1,41 @@
-# IP monitor v.1.2.0
+# IP monitor v.1.3.0
 
-### Установка:
-1. Создай ярлык со следующими параметрами:
+Run using ip_monitor_control.ps1
 
-   powershell.exe -NoExit -ExecutionPolicy Bypass -File "path\\IP monitor\\ip\_monitor\_control.ps1"
+The file ip_summary.csv contains the following columns:
 
-   (path замени на свой путь к папке скрипта)
-   
-4. Запусти скрипт с помощью ярлыка для создания конфиг-файла: в открывшемся окне введи 1 и нажми enter.
-
-### Настройка:
-Открой файл ip\_monitor\_config.psd1
-* Processes - укажи процессы, которые нужно мониторить, без .exe на конце (можно посмотреть в диспетчере задач).
-* PollSeconds - как часто скрипт будет проверять IP процессов.
-* FlushSummarySeconds - как часто скрипт будет обновлять файл ip\_summary.csv с информацией, собранной в удобном виде.
-* OutDir - путь, куда будут выгружаться логи. Если пустой - логи выгружаются в папку скрипта.
-
-
-
-### Обновление:
-
-Просто распакуй архив в папку скрипта с заменой файлов.
-
-
-
-### Использование:
-
-Файл ip\_summary.csv содержит следующие колонки:
-
-* IP - конкретный удалённый IPv4-адрес, с которым был замечен процесс
-* Hits - сколько раз этот IP попал в выборку за время работы скрипта (это не количество TCP-сессий, а количество наблюдений)
-* Polls - сколько раз процесс был обнаружен в работающем состоянии во время опросов
+* IP - a specific remote IPv4 address that the process was observed communicating with
+* Hits - how many times this IP appeared in the sample during the script runtime (this is not the number of TCP sessions, but the number of observations)
+* Polls - how many times the process was detected as running during polling
 * Share - Hits / Polls
-* FirstSeen - когда IP впервые появился
-* LastSeen - последний момент наблюдения
-* SeenMinutes - сколько минут прошло между FirstSeen и LastSeen (не суммарное время соединения а диапазон активности)
+* FirstSeen - when the IP first appeared
+* LastSeen - the last observation timestamp
+* SeenMinutes - how many minutes passed between FirstSeen and LastSeen (not total connection time, but the activity window)
 * HitsPerMinute - Hits / SeenMinutes
 
 
 
-Share - Это ключевой показатель для поиска "базовых" диапазонов и отсечения случайных CDN-всплесков. Значения близкие к 1.0 означают, что IP присутствует практически всегда (стабильный, возможно основной сервер). Близкие к нулю значения наоборот указывают на редкое, эпизодическое появление IP-адреса.
+Share - This is the key metric for identifying "core" ranges and filtering out random CDN spikes. Values close to 1.0 mean that the IP is present almost all the time (stable, possibly a primary server). Values close to zero, on the contrary, indicate rare, occasional appearance of the IP address.
 
 
 
-FirstSeen и LastSeen - полезны для понимания, давно ли используется адрес, и выявления разовых подключений.
+FirstSeen and LastSeen - useful for understanding how long an address has been in use and for identifying one-time connections.
 
 
 
-HitsPerMinute - это, по сути, "плотность появления". Если IP стабильно держит соединение, то HitsPerMinute будет высокий, а если вспыхнул один раз, то низкий.
+HitsPerMinute - this is essentially the "appearance density". If an IP maintains a stable connection, HitsPerMinute will be high, and if it flashed once, it will be low.
 
 
 
-Помни, что CDN (Cloudflare, Fastly, Google) могут давать высокие Share, но при перезапуске клиента пул может смениться. Запускай скрипт в разные сессии для улучшения выборки!
+Keep in mind that CDNs (Cloudflare, Fastly, Google) may show high Share values, but after restarting the client, the pool may change. Run the script in different sessions to improve the sampling!
 
 
 ### ChangeLog:
 
-1.2.0 (19:02:2026) - настройки перемещены в отдельный конфиг-файл
+1.3.0 (20:02:2026) - all settings are now available in a convenient menu directly inside the _control script!
 
-1.1.0 (19:02:2026) - "ips\_raw.log" и "unique\_<process>.txt" теперь создаются в подпапке "raw"
+1.2.0 (19:02:2026) - settings moved to a separate config file
 
-1.0.0 (19:02:2026) - первая стабильная версия
+1.1.0 (19:02:2026) - "ips_raw.log" and "unique_<process>.txt" are now created in the "raw" subfolder
 
-
+1.0.0 (19:02:2026) - first stable version

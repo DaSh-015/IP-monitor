@@ -14,7 +14,7 @@ function New-DefaultConfig {
     $defaultConfig = @'
 @{
     # process names without .exe
-    Processes = @("process1", "process2")
+    Processes = @()
 
     # process polling interval (sec)
     PollSeconds = 10
@@ -130,8 +130,8 @@ function Show-SettingsMenu {
         if ($null -eq $config) {
             Show-Header
             Write-Host ""
-            Write-Host "Сonfig file is corrupted." -ForegroundColor Red
-            $recreate = Read-Host "Would you like to recreate it? (y/n):"
+            Write-Host "Config file is corrupted." -ForegroundColor Red
+            $recreate = Read-Host "Would you like to recreate it? (y/n)"
 
             if ($recreate -match "^[Yy]$") {
                 if (Test-Path $CorruptedConfigPath) {
@@ -156,7 +156,7 @@ function Show-SettingsMenu {
         Write-Host "1) Processes: $(@($config.Processes).Count)"
         Write-Host "2) Polling interval: $([int]$config.PollSeconds) sec"
         Write-Host "3) Summary interval: $([int]$config.FlushSummarySeconds) sec"
-        Write-Host "4) log dir: $([string]$config.OutDir)"
+        Write-Host "4) Log dir: $([string]$config.OutDir)"
         Write-Host ""
         $settingsChoice = Read-Host "Select option"
 
@@ -167,7 +167,7 @@ function Show-SettingsMenu {
             "2" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
             "3" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
             "4" { Write-Host "Option is not available yet"; Start-Sleep -Seconds 1 }
-            default { Write-Host "Invalid choice"; Start-Sleep -Seconds 1 }
+            default { Write-Host "Invalid choice" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
     }
 }
@@ -188,6 +188,6 @@ while ($true) {
         "1" { Start-Monitor }
         "2" { Stop-Monitor }
         "3" { Show-SettingsMenu }
-        default { Write-Host "Invalid choice"; Start-Sleep -Seconds 1 }
+        default { Write-Host "Invalid choice" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
 }

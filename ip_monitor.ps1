@@ -4,7 +4,7 @@ if (-not (Test-Path $ConfigPath)) {
     $defaultConfig = @'
 @{
     # process names without .exe
-    Processes = @("process1", "process2")
+    Processes = @()
 
     # process polling interval (sec)
     PollSeconds = 10

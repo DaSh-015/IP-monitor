@@ -386,8 +386,7 @@ function Show-SettingsMenu {
             "R" { return }
             "1" { Show-ProcessesMenu }
             "2" {
-                Write-Host "Process IP check interval (sec)"
-                $pollInput = Read-Host "New value"
+                $pollInput = Read-Host "Process IP check interval (sec)"
                 $pollSeconds = 0
                 if (-not [int]::TryParse($pollInput, [ref]$pollSeconds) -or $pollSeconds -lt 1) {
                     Write-Host "Invalid value" -ForegroundColor Red
@@ -399,8 +398,7 @@ function Show-SettingsMenu {
                 Save-Config -Config $config
             }
             "3" {
-                Write-Host "ip_summary.csv update interval (sec)"
-                $summaryInput = Read-Host "New value"
+                $summaryInput = Read-Host "ip_summary.csv update interval (sec)"
                 $summarySeconds = 0
                 if (-not [int]::TryParse($summaryInput, [ref]$summarySeconds) -or $summarySeconds -lt 1) {
                     Write-Host "Invalid value" -ForegroundColor Red

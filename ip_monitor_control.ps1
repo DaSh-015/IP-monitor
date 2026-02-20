@@ -229,8 +229,19 @@ function Show-ProcessItemMenu {
         Write-Host ""
 
         $itemChoice = Read-Host "Select option"
+        $normalizedItemChoice = $itemChoice.ToLowerInvariant()
 
-        switch ($itemChoice.ToLowerInvariant()) {
+        if ($normalizedItemChoice -eq '1') {
+            $normalizedItemChoice = 'c'
+        }
+        elseif ($normalizedItemChoice -eq '2') {
+            $normalizedItemChoice = 'd'
+        }
+        elseif ($normalizedItemChoice -eq '0') {
+            $normalizedItemChoice = 'r'
+        }
+
+        switch ($normalizedItemChoice) {
             'c' {
                 $replacement = Normalize-ProcessName -ProcessName (Read-Host "New process name")
                 if ([string]::IsNullOrWhiteSpace($replacement)) {
@@ -269,8 +280,9 @@ function Show-ProcessItemMenu {
                 Save-Config -Config $config
                 return
             }
+			'0' { return }
 			'r' { return }
-			'h' { return }
+			'h' { return 'main' }
             default {
                 Write-Host "Invalid choice" -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -327,7 +339,8 @@ function Show-ProcessesMenu {
         }
 		
 		if ($normalizedChoice -eq 'clear') {
-			Write-Host "Option is not available yet"; Start-Sleep -Seconds 1
+			$config.Processes = @()
+			Save-Config -Config $config
 			continue
         }
 		
@@ -336,14 +349,16 @@ function Show-ProcessesMenu {
         }
 		
 		if ($normalizedChoice -eq 'h') {
-			Write-Host "Option is not available yet"; Start-Sleep -Seconds 1
-			continue
+			return 'main'
         }
 
         $selectedIndex = 0
         if ([int]::TryParse($processChoice, [ref]$selectedIndex)) {
             if ($selectedIndex -ge 1 -and $selectedIndex -le @($config.Processes).Count) {
-                Show-ProcessItemMenu -ProcessIndex ($selectedIndex - 1)
+                $itemResult = Show-ProcessItemMenu -ProcessIndex ($selectedIndex - 1)
+                if ($itemResult -eq 'main') {
+                    return 'main'
+                }
                 continue
             }
         }
@@ -395,7 +410,12 @@ function Show-SettingsMenu {
         $settingsChoice = Read-Host "Select option"
 
         switch ($settingsChoice) {
-            "1" { Show-ProcessesMenu }
+            "1" {
+                $processesMenuResult = Show-ProcessesMenu
+                if ($processesMenuResult -eq 'main') {
+                    return
+                }
+            }
             "2" {
                 $pollInput = Read-Host "Process IP check interval (sec)"
                 $pollSeconds = 0

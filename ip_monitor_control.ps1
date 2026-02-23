@@ -105,6 +105,34 @@ function Get-StopSignalPath {
     return (Join-Path $outDir "ip_monitor.stop.signal")
 }
 
+
+function Get-LifecycleLogPath {
+    $config = Get-Config
+    if ($null -eq $config) {
+        return (Join-Path $PSScriptRoot "ip_monitor_lifecycle.log")
+    }
+
+    $outDir = [string]$config.OutDir
+    if ([string]::IsNullOrWhiteSpace($outDir)) {
+        $outDir = $PSScriptRoot
+    }
+
+    New-Item -ItemType Directory -Path $outDir -Force -ErrorAction SilentlyContinue | Out-Null
+    return (Join-Path $outDir "ip_monitor_lifecycle.log")
+}
+
+function Write-ControlLifecycleEvent {
+    param(
+        [string]$Message,
+        [ValidateSet('INFO', 'WARN', 'ERROR')]
+        [string]$Level = 'INFO'
+    )
+
+    $lifecycleLogPath = Get-LifecycleLogPath
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp [$Level] $Message" | Out-File -FilePath $lifecycleLogPath -Append -Encoding UTF8
+}
+
 function Test-IsRunningByMutex {
     $m = New-Object System.Threading.Mutex($false, $MutexName)
     try {
@@ -133,10 +161,18 @@ function Start-Monitor {
 }
 
 function Stop-Monitor {
+    $stopReason = "stopped by user from control script"
     $stopSignalPath = Get-StopSignalPath
     if ($stopSignalPath) {
-        "stopped by user from control script" | Out-File -FilePath $stopSignalPath -Encoding UTF8 -Force
+        $stopReason | Out-File -FilePath $stopSignalPath -Encoding UTF8 -Force
     }
+
+    $config = Get-Config
+    $pollSeconds = 10
+    if ($null -ne $config -and ($config.PollSeconds -as [int])) {
+        $pollSeconds = [Math]::Max(1, [int]$config.PollSeconds)
+    }
+    $gracefulTimeoutSeconds = [Math]::Max(5, $pollSeconds + 2)
 
     $needle = [regex]::Escape($MonitorScript)
 
@@ -144,12 +180,15 @@ function Stop-Monitor {
              Where-Object { $_.CommandLine -and ($_.CommandLine -match $needle) }
 
     if (-not $procs) {
+        Write-ControlLifecycleEvent -Message "Stop requested by user, but monitor process was not found." -Level WARN
         return
     }
 
     foreach ($p in $procs) {
-        Wait-Process -Id $p.ProcessId -Timeout 5 -ErrorAction SilentlyContinue
+        Wait-Process -Id $p.ProcessId -Timeout $gracefulTimeoutSeconds -ErrorAction SilentlyContinue
+
         if (Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue) {
+            Write-ControlLifecycleEvent -Message "Stop signal was sent by user, but monitor did not exit gracefully in $gracefulTimeoutSeconds sec. Forcing process stop (PID=$($p.ProcessId))." -Level WARN
             Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
         }
     }

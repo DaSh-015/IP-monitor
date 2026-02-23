@@ -3,7 +3,7 @@ $ProgramRoot = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $PSScriptRoot "ip_monitor_config.psd1"
 $FallbackOutDir = $ProgramRoot
 $OutDir = $FallbackOutDir
-$RawDir = Join-Path $OutDir "raw"
+$RawDir = Join-Path $OutDir "raw logs"
 $ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
 $LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
 $LogRaw = Join-Path $RawDir "ips_raw.log"
@@ -58,7 +58,7 @@ try {
         $OutDir = $ProgramRoot
     }
 
-    $RawDir = Join-Path $OutDir "raw"
+    $RawDir = Join-Path $OutDir "raw logs"
     $ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
     $LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
     $LogRaw = Join-Path $RawDir "ips_raw.log"

@@ -58,6 +58,20 @@ function Save-Config {
     Set-Content -Path $ConfigPath -Value $configContent -Encoding UTF8
 }
 
+
+function Save-ConfigAndRestart {
+    param(
+        [hashtable]$Config
+    )
+
+    Save-Config -Config $Config
+
+    if (Test-IsRunningByMutex) {
+        Stop-Monitor
+        Start-Monitor
+    }
+}
+
 function Test-ConfigFormat {
     param(
         [hashtable]$Config
@@ -331,7 +345,7 @@ function Show-ProcessItemMenu {
 
                 $existing[$ProcessIndex] = $replacement
                 $config.Processes = @($existing)
-                Save-Config -Config $config
+                Save-ConfigAndRestart -Config $config
                 continue
             }
             'd' {
@@ -341,7 +355,7 @@ function Show-ProcessItemMenu {
                 }
                 $updatedProcesses.RemoveAt($ProcessIndex)
                 $config.Processes = @($updatedProcesses)
-                Save-Config -Config $config
+                Save-ConfigAndRestart -Config $config
                 return
             }
 			'0' { return }
@@ -398,13 +412,13 @@ function Show-ProcessesMenu {
             }
 
             $config.Processes = @($config.Processes) + $newProcess
-            Save-Config -Config $config
+            Save-ConfigAndRestart -Config $config
             continue
         }
 		
 		if ($normalizedChoice -eq 'clr') {
 			$config.Processes = @()
-			Save-Config -Config $config
+			Save-ConfigAndRestart -Config $config
 			continue
         }
 		
@@ -490,7 +504,7 @@ function Show-SettingsMenu {
                 }
 
                 $config.PollSeconds = $pollSeconds
-                Save-Config -Config $config
+                Save-ConfigAndRestart -Config $config
             }
             "3" {
                 $summaryInput = Read-Host "ip_summary.csv update interval (sec)"
@@ -502,7 +516,7 @@ function Show-SettingsMenu {
                 }
 
                 $config.FlushSummarySeconds = $summarySeconds
-                Save-Config -Config $config
+                Save-ConfigAndRestart -Config $config
             }
             "4" {
                 $logDirInput = Read-Host 'Log unloading folder (enter "d" to select program folder)'
@@ -514,7 +528,7 @@ function Show-SettingsMenu {
 
                 if ($logDirInput.Trim().ToLowerInvariant() -eq 'd') {
                     $config.OutDir = ""
-                    Save-Config -Config $config
+                    Save-ConfigAndRestart -Config $config
                     continue
                 }
 
@@ -535,7 +549,7 @@ function Show-SettingsMenu {
                 }
 
                 $config.OutDir = $resolvedPath
-                Save-Config -Config $config
+                Save-ConfigAndRestart -Config $config
             }
 			"0" { return }
 			"r" { return }

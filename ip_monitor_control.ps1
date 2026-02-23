@@ -90,6 +90,21 @@ function Get-Config {
     return $config
 }
 
+function Get-StopSignalPath {
+    $config = Get-Config
+    if ($null -eq $config) {
+        return $null
+    }
+
+    $outDir = [string]$config.OutDir
+    if ([string]::IsNullOrWhiteSpace($outDir)) {
+        $outDir = $PSScriptRoot
+    }
+
+    New-Item -ItemType Directory -Path $outDir -Force -ErrorAction SilentlyContinue | Out-Null
+    return (Join-Path $outDir "ip_monitor.stop.signal")
+}
+
 function Test-IsRunningByMutex {
     $m = New-Object System.Threading.Mutex($false, $MutexName)
     try {
@@ -118,6 +133,11 @@ function Start-Monitor {
 }
 
 function Stop-Monitor {
+    $stopSignalPath = Get-StopSignalPath
+    if ($stopSignalPath) {
+        "stopped by user from control script" | Out-File -FilePath $stopSignalPath -Encoding UTF8 -Force
+    }
+
     $needle = [regex]::Escape($MonitorScript)
 
     $procs = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" |
@@ -128,7 +148,10 @@ function Stop-Monitor {
     }
 
     foreach ($p in $procs) {
-        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+        Wait-Process -Id $p.ProcessId -Timeout 5 -ErrorAction SilentlyContinue
+        if (Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue) {
+            Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+        }
     }
 
     Start-Sleep -Milliseconds 400

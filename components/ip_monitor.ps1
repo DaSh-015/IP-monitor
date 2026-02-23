@@ -7,7 +7,8 @@ $RawDir = Join-Path $OutDir "raw logs"
 $ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
 $LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
 $LogRaw = Join-Path $RawDir "ips_raw.log"
-$SummaryCsv = Join-Path $OutDir "ip_summary.csv"
+$SummaryDir = Join-Path $OutDir "summary logs"
+$SummaryCsv = $null
 
 function Write-LifecycleLog {
     param(
@@ -62,12 +63,15 @@ try {
     $ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
     $LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
     $LogRaw = Join-Path $RawDir "ips_raw.log"
-    $SummaryCsv = Join-Path $OutDir "ip_summary.csv"
+    $SummaryDir = Join-Path $OutDir "summary logs"
+    $runStamp = Get-Date -Format "yyMMdd_HHmmss"
+    $SummaryCsv = Join-Path $SummaryDir ("ip_summary_{0}.csv" -f $runStamp)
 
     New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
     New-Item -ItemType Directory -Force -Path $RawDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $SummaryDir | Out-Null
 
-    Write-LifecycleLog -Message "Started - PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir"
+    Write-LifecycleLog -Message "Started - PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir, SummaryFile=$([System.IO.Path]::GetFileName($SummaryCsv))"
 
     # key: "process|ip"
     $stats = @{}  # value: PSCustomObject { Process, IP, Hits, FirstSeen, LastSeen }

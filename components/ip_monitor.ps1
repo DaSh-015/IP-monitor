@@ -1,6 +1,7 @@
 # --- settings ---
+$ProgramRoot = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $PSScriptRoot "ip_monitor_config.psd1"
-$FallbackOutDir = $PSScriptRoot
+$FallbackOutDir = $ProgramRoot
 $OutDir = $FallbackOutDir
 $RawDir = Join-Path $OutDir "raw"
 $ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
@@ -37,7 +38,7 @@ try {
     # summary file update interval (sec)
     FlushSummarySeconds = 60
 
-    # log unloading folder (empty = script folder)
+    # log unloading folder (empty = program root folder)
     OutDir = ""
 }
 '@
@@ -54,7 +55,7 @@ try {
     $FlushSummarySeconds = [int]$config.FlushSummarySeconds
     $OutDir = [string]$config.OutDir
     if ([string]::IsNullOrWhiteSpace($OutDir)) {
-        $OutDir = $PSScriptRoot
+        $OutDir = $ProgramRoot
     }
 
     $RawDir = Join-Path $OutDir "raw"

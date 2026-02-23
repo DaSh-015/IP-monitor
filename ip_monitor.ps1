@@ -1,7 +1,32 @@
 # --- settings ---
 $ConfigPath = Join-Path $PSScriptRoot "ip_monitor_config.psd1"
-if (-not (Test-Path $ConfigPath)) {
-    $defaultConfig = @'
+$FallbackOutDir = $PSScriptRoot
+$OutDir = $FallbackOutDir
+$RawDir = Join-Path $OutDir "raw"
+$ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
+$LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
+$LogRaw = Join-Path $RawDir "ips_raw.log"
+$SummaryCsv = Join-Path $OutDir "ip_summary.csv"
+
+function Write-LifecycleLog {
+    param(
+        [string]$Message,
+        [ValidateSet('INFO', 'WARN', 'ERROR')]
+        [string]$Level = 'INFO'
+    )
+
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        "$timestamp [$Level] $Message" | Out-File -Append -FilePath $LifecycleLog -Encoding UTF8
+    }
+    catch {
+        # Do not throw from logging helper.
+    }
+}
+
+try {
+    if (-not (Test-Path $ConfigPath)) {
+        $defaultConfig = @'
 @{
     # process names without .exe
     Processes = @()
@@ -16,134 +41,176 @@ if (-not (Test-Path $ConfigPath)) {
     OutDir = ""
 }
 '@
-    Set-Content -Path $ConfigPath -Value $defaultConfig -Encoding UTF8
-}
-
-$config = Import-PowerShellDataFile -Path $ConfigPath
-if ($null -eq $config) {
-    throw "Config error."
-}
-
-$Processes = @($config.Processes)
-$PollSeconds = [int]$config.PollSeconds
-$FlushSummarySeconds = [int]$config.FlushSummarySeconds
-$OutDir = [string]$config.OutDir
-if ([string]::IsNullOrWhiteSpace($OutDir)) {
-    $OutDir = $PSScriptRoot
-}
-$RawDir = Join-Path $OutDir "raw"
-$LogRaw = Join-Path $RawDir "ips_raw.log"
-$SummaryCsv = Join-Path $OutDir "ip_summary.csv"
-
-New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-New-Item -ItemType Directory -Force -Path $RawDir | Out-Null
-
-# key: "process|ip"
-$stats = @{}  # value: PSCustomObject { Process, IP, Hits, FirstSeen, LastSeen }
-
-# process -> poll count (how many iterations the process was observed running)
-$procPolls = @{}
-
-$lastFlush = Get-Date
-
-function IsIPv4($s) {
-    return ($s -match "^\d+\.\d+\.\d+\.\d+$")
-}
-
-# --- single instance guard (named mutex) ---
-$MutexName = "Global\IpMonitorSingleInstance"
-$mutex = New-Object System.Threading.Mutex($false, $MutexName)
-$hasHandle = $false
-
-try {
-    # wait 0 ms: if already running, exit immediately
-    $hasHandle = $mutex.WaitOne(0, $false)
-    if (-not $hasHandle) {
-        exit
+        Set-Content -Path $ConfigPath -Value $defaultConfig -Encoding UTF8
     }
-	while ($true) {
-		$now = Get-Date
 
-		foreach ($p in $Processes) {
-			$procs = Get-Process -Name $p -ErrorAction SilentlyContinue
-			foreach ($proc in $procs) {
-				$procId = $proc.Id
-				if (-not $procPolls.ContainsKey($p)) { $procPolls[$p] = 0 }
-				$procPolls[$p] += 1
+    $config = Import-PowerShellDataFile -Path $ConfigPath -ErrorAction Stop
+    if ($null -eq $config) {
+        throw "Config error."
+    }
 
-				$tcp = Get-NetTCPConnection -OwningProcess $procId -ErrorAction SilentlyContinue
-				$udp = Get-NetUDPEndpoint -OwningProcess $procId -ErrorAction SilentlyContinue
+    $Processes = @($config.Processes)
+    $PollSeconds = [int]$config.PollSeconds
+    $FlushSummarySeconds = [int]$config.FlushSummarySeconds
+    $OutDir = [string]$config.OutDir
+    if ([string]::IsNullOrWhiteSpace($OutDir)) {
+        $OutDir = $PSScriptRoot
+    }
 
-				$ips = @()
-				if ($tcp) { $ips += $tcp.RemoteAddress }
-				if ($udp) { $ips += $udp.RemoteAddress }
+    $RawDir = Join-Path $OutDir "raw"
+    $ControlStopSignal = Join-Path $OutDir "ip_monitor.stop.signal"
+    $LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
+    $LogRaw = Join-Path $RawDir "ips_raw.log"
+    $SummaryCsv = Join-Path $OutDir "ip_summary.csv"
 
-				foreach ($ip in $ips) {
-					if (!(IsIPv4 $ip)) { continue }
-					if ($ip -eq "127.0.0.1" -or $ip -eq "0.0.0.0") { continue }
+    New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $RawDir | Out-Null
 
-					# raw log (timestamp, process, ip)
-					"$($now.ToString('yyyy-MM-dd HH:mm:ss'))`t$p`t$ip" | Out-File -Append -FilePath $LogRaw
+    Write-LifecycleLog -Message "Script started. PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir"
 
-					# unique list per process (file: unique_<process>.txt)
-					$uniqueFile = Join-Path $RawDir ("unique_{0}.txt" -f $p)
-					if (-not (Test-Path $uniqueFile)) {
-						New-Item -ItemType File -Path $uniqueFile | Out-Null
-					}
-					if (-not (Select-String -Path $uniqueFile -Pattern "^$([regex]::Escape($ip))$" -Quiet -ErrorAction SilentlyContinue)) {
-						$ip | Out-File -Append -FilePath $uniqueFile
-					}
+    # key: "process|ip"
+    $stats = @{}  # value: PSCustomObject { Process, IP, Hits, FirstSeen, LastSeen }
 
-					# stats per (process, ip)
-					$key = "$p|$ip"
-					if (-not $stats.ContainsKey($key)) {
-						$stats[$key] = [pscustomobject]@{
-							Process   = $p
-							IP        = $ip
-							Hits      = 1
-							FirstSeen = $now
-							LastSeen  = $now
-						}
-					} else {
-						$stats[$key].Hits += 1
-						$stats[$key].LastSeen = $now
-					}
-				}
-			}
-		}
+    # process -> poll count (how many iterations the process was observed running)
+    $procPolls = @{}
 
-		# flush summary periodically
-		if (($now - $lastFlush).TotalSeconds -ge $FlushSummarySeconds) {
-			$rows = foreach ($kv in $stats.GetEnumerator()) {
-				$s = $kv.Value
-				$spanMin = [math]::Max(0.001, ($s.LastSeen - $s.FirstSeen).TotalMinutes)
-				$polls = if ($procPolls.ContainsKey($s.Process)) { [int]$procPolls[$s.Process] } else { 0 }
-				$share = if ($polls -gt 0) { [math]::Round($s.Hits / $polls, 6) } else { 0 }
+    $lastFlush = Get-Date
 
-				[pscustomobject]@{
-					Process        = $s.Process
-					IP             = $s.IP
-					Hits           = $s.Hits
-					Polls          = $polls
-					Share          = $share
-					FirstSeen      = $s.FirstSeen.ToString("yyyy-MM-dd HH:mm:ss")
-					LastSeen       = $s.LastSeen.ToString("yyyy-MM-dd HH:mm:ss")
-					SeenMinutes    = [math]::Round(($s.LastSeen - $s.FirstSeen).TotalMinutes, 3)
-					HitsPerMinute  = [math]::Round($s.Hits / $spanMin, 3)
-				}
-			}
+    function IsIPv4($s) {
+        return ($s -match "^\d+\.\d+\.\d+\.\d+$")
+    }
 
-			$rows |
-			Sort-Object Process, Hits -Descending |
-			Export-Csv -NoTypeInformation -Encoding UTF8 -Path $SummaryCsv
+    # --- single instance guard (named mutex) ---
+    $MutexName = "Global\IpMonitorSingleInstance"
+    $mutex = New-Object System.Threading.Mutex($false, $MutexName)
+    $hasHandle = $false
+    $stopReason = "unknown"
 
-			$lastFlush = $now
-		}
+    try {
+        # wait 0 ms: if already running, exit immediately
+        $hasHandle = $mutex.WaitOne(0, $false)
+        if (-not $hasHandle) {
+            $stopReason = "start skipped: already running"
+            Write-LifecycleLog -Message "Script did not start because another instance is already running." -Level WARN
+            exit
+        }
 
-		Start-Sleep -Seconds $PollSeconds
-	}
+        while ($true) {
+            $now = Get-Date
+
+            if (Test-Path $ControlStopSignal) {
+                $signal = Get-Content -Path $ControlStopSignal -Raw -ErrorAction SilentlyContinue
+                if ([string]::IsNullOrWhiteSpace($signal)) {
+                    $stopReason = "stop requested: external signal"
+                }
+                else {
+                    $stopReason = "stop requested: $($signal.Trim())"
+                }
+                Remove-Item -Path $ControlStopSignal -Force -ErrorAction SilentlyContinue
+                break
+            }
+
+            foreach ($p in $Processes) {
+                $procs = Get-Process -Name $p -ErrorAction SilentlyContinue
+                foreach ($proc in $procs) {
+                    $procId = $proc.Id
+                    if (-not $procPolls.ContainsKey($p)) { $procPolls[$p] = 0 }
+                    $procPolls[$p] += 1
+
+                    $tcp = Get-NetTCPConnection -OwningProcess $procId -ErrorAction SilentlyContinue
+                    $udp = Get-NetUDPEndpoint -OwningProcess $procId -ErrorAction SilentlyContinue
+
+                    $ips = @()
+                    if ($tcp) { $ips += $tcp.RemoteAddress }
+                    if ($udp) { $ips += $udp.RemoteAddress }
+
+                    foreach ($ip in $ips) {
+                        if (!(IsIPv4 $ip)) { continue }
+                        if ($ip -eq "127.0.0.1" -or $ip -eq "0.0.0.0") { continue }
+
+                        # raw log (timestamp, process, ip)
+                        "$($now.ToString('yyyy-MM-dd HH:mm:ss'))`t$p`t$ip" | Out-File -Append -FilePath $LogRaw -Encoding UTF8
+
+                        # unique list per process (file: unique_<process>.txt)
+                        $uniqueFile = Join-Path $RawDir ("unique_{0}.txt" -f $p)
+                        if (-not (Test-Path $uniqueFile)) {
+                            New-Item -ItemType File -Path $uniqueFile | Out-Null
+                        }
+                        if (-not (Select-String -Path $uniqueFile -Pattern "^$([regex]::Escape($ip))$" -Quiet -ErrorAction SilentlyContinue)) {
+                            $ip | Out-File -Append -FilePath $uniqueFile -Encoding UTF8
+                        }
+
+                        # stats per (process, ip)
+                        $key = "$p|$ip"
+                        if (-not $stats.ContainsKey($key)) {
+                            $stats[$key] = [pscustomobject]@{
+                                Process   = $p
+                                IP        = $ip
+                                Hits      = 1
+                                FirstSeen = $now
+                                LastSeen  = $now
+                            }
+                        }
+                        else {
+                            $stats[$key].Hits += 1
+                            $stats[$key].LastSeen = $now
+                        }
+                    }
+                }
+            }
+
+            # flush summary periodically
+            if (($now - $lastFlush).TotalSeconds -ge $FlushSummarySeconds) {
+                $rows = foreach ($kv in $stats.GetEnumerator()) {
+                    $s = $kv.Value
+                    $spanMin = [math]::Max(0.001, ($s.LastSeen - $s.FirstSeen).TotalMinutes)
+                    $polls = if ($procPolls.ContainsKey($s.Process)) { [int]$procPolls[$s.Process] } else { 0 }
+                    $share = if ($polls -gt 0) { [math]::Round($s.Hits / $polls, 6) } else { 0 }
+
+                    [pscustomobject]@{
+                        Process        = $s.Process
+                        IP             = $s.IP
+                        Hits           = $s.Hits
+                        Polls          = $polls
+                        Share          = $share
+                        FirstSeen      = $s.FirstSeen.ToString("yyyy-MM-dd HH:mm:ss")
+                        LastSeen       = $s.LastSeen.ToString("yyyy-MM-dd HH:mm:ss")
+                        SeenMinutes    = [math]::Round(($s.LastSeen - $s.FirstSeen).TotalMinutes, 3)
+                        HitsPerMinute  = [math]::Round($s.Hits / $spanMin, 3)
+                    }
+                }
+
+                $rows |
+                    Sort-Object Process, Hits -Descending |
+                    Export-Csv -NoTypeInformation -Encoding UTF8 -Path $SummaryCsv
+
+                $lastFlush = $now
+            }
+
+            Start-Sleep -Seconds $PollSeconds
+        }
+    }
+    catch {
+        $stopReason = "runtime error"
+        Write-LifecycleLog -Message ("Runtime error: " + $_.Exception.Message) -Level ERROR
+        throw
+    }
+    finally {
+        Write-LifecycleLog -Message "Script stopped. Reason: $stopReason"
+
+        if ($hasHandle) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
 }
-finally {
-    if ($hasHandle) { $mutex.ReleaseMutex() }
-    $mutex.Dispose()
+catch {
+    if (-not (Test-Path $OutDir)) {
+        New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+    }
+
+    if (-not (Test-Path $LifecycleLog)) {
+        New-Item -ItemType File -Path $LifecycleLog -Force | Out-Null
+    }
+
+    Write-LifecycleLog -Message ("Startup error: " + $_.Exception.Message) -Level ERROR
+    throw
 }

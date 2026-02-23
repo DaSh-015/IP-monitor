@@ -38,7 +38,7 @@ try {
     # summary file update interval (sec)
     FlushSummarySeconds = 60
 
-    # log unloading folder (empty = program root folder)
+    # log unloading folder (empty = program folder)
     OutDir = ""
 }
 '@

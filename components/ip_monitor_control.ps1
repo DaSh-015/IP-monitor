@@ -23,7 +23,7 @@ function New-DefaultConfig {
     # summary file update interval (sec)
     FlushSummarySeconds = 60
 
-    # log unloading folder (empty = program root folder)
+    # log unloading folder (empty = program folder)
     OutDir = ""
 }
 '@
@@ -50,7 +50,7 @@ function Save-Config {
         '    # summary file update interval (sec)'
         "    FlushSummarySeconds = $([int]$Config.FlushSummarySeconds)"
         ''
-        '    # log unloading folder (empty = program root folder)'
+        '    # log unloading folder (empty = program folder)'
         "    OutDir = '$outDir'"
         '}'
     ) -join [Environment]::NewLine
@@ -463,7 +463,7 @@ function Show-SettingsMenu {
         Write-Host ""
         $displayOutDir = [string]$config.OutDir
         if ([string]::IsNullOrWhiteSpace($displayOutDir)) {
-            $displayOutDir = "$ProgramRoot (same as program root folder)"
+            $displayOutDir = "$ProgramRoot (same as program folder)"
         }
         Write-Host "1 - processes: $(@($config.Processes).Count)"
         Write-Host "2 - polling interval: $([int]$config.PollSeconds) sec"
@@ -505,7 +505,7 @@ function Show-SettingsMenu {
                 Save-Config -Config $config
             }
             "4" {
-                $logDirInput = Read-Host 'Log unloading folder (enter "d" to select program root folder)'
+                $logDirInput = Read-Host 'Log unloading folder (enter "d" to select program folder)'
                 if ([string]::IsNullOrWhiteSpace($logDirInput)) {
                     Write-Host "canceled" -ForegroundColor Yellow
                     Start-Sleep -Milliseconds 400

@@ -153,15 +153,17 @@ function Start-Monitor {
 		Start-Sleep -Seconds 1
         return
     }
-
+	
+	Write-Host "Please wait..." -ForegroundColor Yellow
     $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$MonitorScript`""
     Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -ArgumentList $arg | Out-Null
-
-    Start-Sleep -Milliseconds 400
+	
+    Start-Sleep -Seconds 1
 }
 
 function Stop-Monitor {
-    $stopReason = "stopped by user from control script"
+	Write-Host "Please wait..." -ForegroundColor Yellow
+    $stopReason = "by user from control script"
     $stopSignalPath = Get-StopSignalPath
     if ($stopSignalPath) {
         $stopReason | Out-File -FilePath $stopSignalPath -Encoding UTF8 -Force
@@ -181,6 +183,7 @@ function Stop-Monitor {
 
     if (-not $procs) {
         Write-ControlLifecycleEvent -Message "Stop requested by user, but monitor process was not found." -Level WARN
+		Start-Sleep -Seconds 1
         return
     }
 
@@ -192,8 +195,6 @@ function Stop-Monitor {
             Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
         }
     }
-
-    Start-Sleep -Milliseconds 400
 }
 
 function Show-Status {
@@ -374,7 +375,7 @@ function Show-ProcessesMenu {
         }
 		
 		Write-Host "$index/a - add process"
-		Write-Host "clear - delete all processes"
+		Write-Host "clr - delete all processes"
 		Write-Host "0/r - return"
 		Write-Host "h - main menu"
         Write-Host ""
@@ -400,7 +401,7 @@ function Show-ProcessesMenu {
             continue
         }
 		
-		if ($normalizedChoice -eq 'clear') {
+		if ($normalizedChoice -eq 'clr') {
 			$config.Processes = @()
 			Save-Config -Config $config
 			continue
@@ -461,7 +462,7 @@ function Show-SettingsMenu {
         Write-Host ""
         $displayOutDir = [string]$config.OutDir
         if ([string]::IsNullOrWhiteSpace($displayOutDir)) {
-            $displayOutDir = $PSScriptRoot
+            $displayOutDir = "$PSScriptRoot (same as script folder)"
         }
         Write-Host "1 - processes: $(@($config.Processes).Count)"
         Write-Host "2 - polling interval: $([int]$config.PollSeconds) sec"
@@ -553,6 +554,7 @@ while ($true) {
     Write-Host "1 - start"
     Write-Host "2 - stop"
     Write-Host "3 - settings"
+	Write-Host "0 - refresh"
     Write-Host ""
     $choice = Read-Host "Select option"
 
@@ -560,6 +562,7 @@ while ($true) {
         "1" { Start-Monitor }
         "2" { Stop-Monitor }
         "3" { Show-SettingsMenu }
+		"0" {}
         default { Write-Host "Invalid choice" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
 }

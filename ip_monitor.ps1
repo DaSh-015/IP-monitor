@@ -66,7 +66,7 @@ try {
     New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
     New-Item -ItemType Directory -Force -Path $RawDir | Out-Null
 
-    Write-LifecycleLog -Message "Script started. PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir"
+    Write-LifecycleLog -Message "Started - PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir"
 
     # key: "process|ip"
     $stats = @{}  # value: PSCustomObject { Process, IP, Hits, FirstSeen, LastSeen }
@@ -84,13 +84,13 @@ try {
     $MutexName = "Global\IpMonitorSingleInstance"
     $mutex = New-Object System.Threading.Mutex($false, $MutexName)
     $hasHandle = $false
-    $stopReason = "unknown"
+    $stopReason = "- unknown error"
 
     try {
         # wait 0 ms: if already running, exit immediately
         $hasHandle = $mutex.WaitOne(0, $false)
         if (-not $hasHandle) {
-            $stopReason = "start skipped: already running"
+            $stopReason = "- already running"
             Write-LifecycleLog -Message "Script did not start because another instance is already running." -Level WARN
             exit
         }
@@ -101,10 +101,10 @@ try {
             if (Test-Path $ControlStopSignal) {
                 $signal = Get-Content -Path $ControlStopSignal -Raw -ErrorAction SilentlyContinue
                 if ([string]::IsNullOrWhiteSpace($signal)) {
-                    $stopReason = "stop requested: external signal"
+                    $stopReason = "- stop requested by external signal"
                 }
                 else {
-                    $stopReason = "stop requested: $($signal.Trim())"
+                    $stopReason = "- stop requested $($signal.Trim())"
                 }
                 Remove-Item -Path $ControlStopSignal -Force -ErrorAction SilentlyContinue
                 break
@@ -191,12 +191,12 @@ try {
         }
     }
     catch {
-        $stopReason = "runtime error"
+        $stopReason = "- runtime error"
         Write-LifecycleLog -Message ("Runtime error: " + $_.Exception.Message) -Level ERROR
         throw
     }
     finally {
-        Write-LifecycleLog -Message "Script stopped. Reason: $stopReason"
+        Write-LifecycleLog -Message "Stopped $stopReason"
 
         if ($hasHandle) { $mutex.ReleaseMutex() }
         $mutex.Dispose()

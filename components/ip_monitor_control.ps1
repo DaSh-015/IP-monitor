@@ -1,3 +1,4 @@
+$ProgramRoot = Split-Path -Parent $PSScriptRoot
 $MonitorScript = Join-Path $PSScriptRoot "ip_monitor.ps1"
 if (-not (Test-Path $MonitorScript)) {
     Clear-Host
@@ -22,7 +23,7 @@ function New-DefaultConfig {
     # summary file update interval (sec)
     FlushSummarySeconds = 60
 
-    # log unloading folder (empty = script folder)
+    # log unloading folder (empty = program root folder)
     OutDir = ""
 }
 '@
@@ -49,7 +50,7 @@ function Save-Config {
         '    # summary file update interval (sec)'
         "    FlushSummarySeconds = $([int]$Config.FlushSummarySeconds)"
         ''
-        '    # log unloading folder (empty = script folder)'
+        '    # log unloading folder (empty = program root folder)'
         "    OutDir = '$outDir'"
         '}'
     ) -join [Environment]::NewLine
@@ -98,7 +99,7 @@ function Get-StopSignalPath {
 
     $outDir = [string]$config.OutDir
     if ([string]::IsNullOrWhiteSpace($outDir)) {
-        $outDir = $PSScriptRoot
+        $outDir = $ProgramRoot
     }
 
     New-Item -ItemType Directory -Path $outDir -Force -ErrorAction SilentlyContinue | Out-Null
@@ -109,12 +110,12 @@ function Get-StopSignalPath {
 function Get-LifecycleLogPath {
     $config = Get-Config
     if ($null -eq $config) {
-        return (Join-Path $PSScriptRoot "ip_monitor_lifecycle.log")
+        return (Join-Path $ProgramRoot "ip_monitor_lifecycle.log")
     }
 
     $outDir = [string]$config.OutDir
     if ([string]::IsNullOrWhiteSpace($outDir)) {
-        $outDir = $PSScriptRoot
+        $outDir = $ProgramRoot
     }
 
     New-Item -ItemType Directory -Path $outDir -Force -ErrorAction SilentlyContinue | Out-Null
@@ -462,7 +463,7 @@ function Show-SettingsMenu {
         Write-Host ""
         $displayOutDir = [string]$config.OutDir
         if ([string]::IsNullOrWhiteSpace($displayOutDir)) {
-            $displayOutDir = "$PSScriptRoot (same as script folder)"
+            $displayOutDir = "$ProgramRoot (same as program root folder)"
         }
         Write-Host "1 - processes: $(@($config.Processes).Count)"
         Write-Host "2 - polling interval: $([int]$config.PollSeconds) sec"
@@ -504,7 +505,7 @@ function Show-SettingsMenu {
                 Save-Config -Config $config
             }
             "4" {
-                $logDirInput = Read-Host 'Log unloading folder (enter "d" to select script folder)'
+                $logDirInput = Read-Host 'Log unloading folder (enter "d" to select program root folder)'
                 if ([string]::IsNullOrWhiteSpace($logDirInput)) {
                     Write-Host "canceled" -ForegroundColor Yellow
                     Start-Sleep -Milliseconds 400

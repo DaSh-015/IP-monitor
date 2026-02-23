@@ -63,10 +63,10 @@ function Save-ConfigAndRestart {
     param(
         [hashtable]$Config
     )
-
     Save-Config -Config $Config
-
+	
     if (Test-IsRunningByMutex) {
+		Write-ControlLifecycleEvent -Message "Restarting monitor process to apply settings..." -Level INFO
         Stop-Monitor
         Start-Monitor
     }
@@ -169,7 +169,7 @@ function Start-Monitor {
         return
     }
 	
-	Write-Host "Please wait..." -ForegroundColor Yellow
+	Write-Host "Starting. Please wait..." -ForegroundColor Yellow
     $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$MonitorScript`""
     Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -ArgumentList $arg | Out-Null
 	
@@ -177,7 +177,7 @@ function Start-Monitor {
 }
 
 function Stop-Monitor {
-	Write-Host "Please wait..." -ForegroundColor Yellow
+	Write-Host "Stopping. Please wait..." -ForegroundColor Yellow
     $stopReason = "by user from control script"
     $stopSignalPath = Get-StopSignalPath
     if ($stopSignalPath) {
@@ -198,7 +198,6 @@ function Stop-Monitor {
 
     if (-not $procs) {
         Write-ControlLifecycleEvent -Message "Stop requested by user, but monitor process was not found." -Level WARN
-		Start-Sleep -Seconds 1
         return
     }
 

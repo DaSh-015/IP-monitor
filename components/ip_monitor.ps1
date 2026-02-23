@@ -64,14 +64,14 @@ try {
     $LifecycleLog = Join-Path $OutDir "ip_monitor_lifecycle.log"
     $LogRaw = Join-Path $RawDir "ips_raw.log"
     $SummaryDir = Join-Path $OutDir "summary logs"
-    $runStamp = Get-Date -Format "yyMMdd_HHmmssfff"
+    $runStamp = Get-Date -Format "yyMMdd_HHmmss"
     $SummaryCsv = Join-Path $SummaryDir ("ip_summary_{0}.csv" -f $runStamp)
 
     New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
     New-Item -ItemType Directory -Force -Path $RawDir | Out-Null
     New-Item -ItemType Directory -Force -Path $SummaryDir | Out-Null
 
-    Write-LifecycleLog -Message "Started - PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir, SummaryCsv=$SummaryCsv"
+    Write-LifecycleLog -Message "Started - PID=$PID, PollSeconds=$PollSeconds, FlushSummarySeconds=$FlushSummarySeconds, OutDir=$OutDir, SummaryFile=$([System.IO.Path]::GetFileName($SummaryCsv))"
 
     # key: "process|ip"
     $stats = @{}  # value: PSCustomObject { Process, IP, Hits, FirstSeen, LastSeen }
